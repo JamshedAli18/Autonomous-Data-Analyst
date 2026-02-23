@@ -2,6 +2,8 @@
 
 Professional AI-powered CSV data analysis platform.
 
+Live Demo : https://autonomous-data-analyst-duyzuesvmehzjgjdwmvp6t.streamlit.app/
+
 ## Features
 
 - Upload CSV files
