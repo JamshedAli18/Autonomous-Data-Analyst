@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
-from langchain.chains import LLMChain
 from dotenv import load_dotenv
 import json
 import numpy as np
@@ -76,14 +75,14 @@ Provide a 1-2 sentence explanation that:
 Keep it to maximum 2 sentences."""
         )
         
-        chain = LLMChain(llm=explanation_llm, prompt=prompt_template)
-        explanation = chain.run(
-            chart_title=chart_title,
-            chart_type=chart_type,
-            column_info=column_info
-        )
+        chain = prompt_template | explanation_llm
+        explanation = chain.invoke({
+            "chart_title": chart_title,
+            "chart_type": chart_type,
+            "column_info": column_info
+        })
         
-        return explanation.strip()
+        return explanation.content.strip()
     
     # ============================================
     # SMART COLUMN TYPE INSPECTION
@@ -96,7 +95,6 @@ Keep it to maximum 2 sentences."""
             "datetime": self.df.select_dtypes(include=['datetime64']).columns.tolist()
         }
         
-        # Try to detect datetime columns that might be stored as strings
         for col in info["categorical"]:
             try:
                 pd.to_datetime(self.df[col], errors='coerce')
@@ -116,7 +114,6 @@ Keep it to maximum 2 sentences."""
         charts_to_create = []
         col_info = self.inspect_columns()
         
-        # Rule 1: If numeric columns exist → Histogram (Distribution)
         if col_info["numeric"]:
             charts_to_create.append({
                 "type": "histogram",
@@ -125,7 +122,6 @@ Keep it to maximum 2 sentences."""
                 "priority": 1
             })
         
-        # Rule 2: If multiple numeric columns → Correlation heatmap
         if len(col_info["numeric"]) > 1:
             charts_to_create.append({
                 "type": "correlation_heatmap",
@@ -134,7 +130,6 @@ Keep it to maximum 2 sentences."""
                 "priority": 1
             })
             
-            # Rule 3: If two strong correlated features → Scatter plot
             correlation = self.df[col_info["numeric"]].corr()
             strong_corr = []
             for i in range(len(correlation.columns)):
@@ -154,7 +149,6 @@ Keep it to maximum 2 sentences."""
                     "priority": 2
                 })
         
-        # Rule 4: If categorical column exists → Bar chart
         if col_info["categorical"]:
             best_cat = col_info["categorical"][0]
             if self.df[best_cat].nunique() < 20:
@@ -165,7 +159,6 @@ Keep it to maximum 2 sentences."""
                     "priority": 2
                 })
         
-        # Rule 5: If date/time column exists → Line chart
         if col_info["datetime"]:
             date_col = col_info["datetime"][0]
             if col_info["numeric"]:
@@ -177,7 +170,6 @@ Keep it to maximum 2 sentences."""
                     "priority": 2
                 })
         
-        # Rule 6: Box plot for outlier detection
         if col_info["numeric"]:
             charts_to_create.append({
                 "type": "boxplot",
@@ -206,12 +198,7 @@ Keep it to maximum 2 sentences."""
             plt.savefig(file_path, dpi=100, bbox_inches='tight')
             plt.close()
             
-            # Generate explanation
-            explanation = self.explain_chart(
-                title,
-                "Histogram",
-                f"Shows distribution of {column} values"
-            )
+            explanation = self.explain_chart(title, "Histogram", f"Shows distribution of {column} values")
             
             self.charts_generated.append({
                 "file": file_path,
@@ -236,12 +223,7 @@ Keep it to maximum 2 sentences."""
             plt.savefig(file_path, dpi=100, bbox_inches='tight')
             plt.close()
             
-            # Generate explanation
-            explanation = self.explain_chart(
-                title,
-                "Heatmap",
-                f"Shows relationships between columns: {', '.join(columns)}"
-            )
+            explanation = self.explain_chart(title, "Heatmap", f"Shows relationships between columns: {', '.join(columns)}")
             
             self.charts_generated.append({
                 "file": file_path,
@@ -267,12 +249,7 @@ Keep it to maximum 2 sentences."""
             plt.savefig(file_path, dpi=100, bbox_inches='tight')
             plt.close()
             
-            # Generate explanation
-            explanation = self.explain_chart(
-                title,
-                "Scatter Plot",
-                f"Compares {col1} and {col2} values"
-            )
+            explanation = self.explain_chart(title, "Scatter Plot", f"Compares {col1} and {col2} values")
             
             self.charts_generated.append({
                 "file": file_path,
@@ -299,12 +276,7 @@ Keep it to maximum 2 sentences."""
             plt.savefig(file_path, dpi=100, bbox_inches='tight')
             plt.close()
             
-            # Generate explanation
-            explanation = self.explain_chart(
-                title,
-                "Bar Chart",
-                f"Counts different categories in {column}"
-            )
+            explanation = self.explain_chart(title, "Bar Chart", f"Counts different categories in {column}")
             
             self.charts_generated.append({
                 "file": file_path,
@@ -334,12 +306,7 @@ Keep it to maximum 2 sentences."""
             plt.savefig(file_path, dpi=100, bbox_inches='tight')
             plt.close()
             
-            # Generate explanation
-            explanation = self.explain_chart(
-                title,
-                "Line Chart",
-                f"Shows how {value_col} changes over time"
-            )
+            explanation = self.explain_chart(title, "Line Chart", f"Shows how {value_col} changes over time")
             
             self.charts_generated.append({
                 "file": file_path,
@@ -364,12 +331,7 @@ Keep it to maximum 2 sentences."""
             plt.savefig(file_path, dpi=100, bbox_inches='tight')
             plt.close()
             
-            # Generate explanation
-            explanation = self.explain_chart(
-                title,
-                "Box Plot",
-                f"Identifies unusual or extreme values in data"
-            )
+            explanation = self.explain_chart(title, "Box Plot", f"Identifies unusual or extreme values in data")
             
             self.charts_generated.append({
                 "file": file_path,
@@ -414,7 +376,7 @@ Keep it to maximum 2 sentences."""
         return [chart["file"] for chart in self.charts_generated]
     
     # ============================================
-    # STEP 1: Planner (llama-3.3-70b-versatile)
+    # STEP 1: Planner
     # ============================================
     def plan_analysis(self):
         """Use Planner Model for reasoning"""
@@ -436,13 +398,13 @@ Create a brief analysis plan with:
 Be concise and specific to THIS dataset."""
         )
         
-        chain = LLMChain(llm=planner_llm, prompt=prompt_template)
-        plan = chain.run(data_info=json.dumps(summary, indent=2, default=str))
+        chain = prompt_template | planner_llm
+        plan = chain.invoke({"data_info": json.dumps(summary, indent=2, default=str)})
         
-        return plan
+        return plan.content
     
     # ============================================
-    # STEP 2: Code Generator (openai/gpt-oss-120b)
+    # STEP 2: Code Generator
     # ============================================
     def generate_analysis_code(self):
         """Use Code Generation Model"""
@@ -471,16 +433,16 @@ Generate code snippets for:
 Format: Return only working Python code, no explanations."""
         )
         
-        chain = LLMChain(llm=code_gen_llm, prompt=prompt_template)
-        code = chain.run(numeric_cols=numeric_str, categorical_cols=categorical_str)
+        chain = prompt_template | code_gen_llm
+        code = chain.invoke({"numeric_cols": numeric_str, "categorical_cols": categorical_str})
         
-        return code
+        return code.content
     
     # ============================================
-    # STEP 3: Explanation Model (groq/compound-mini)
+    # STEP 3: Explanation Model
     # ============================================
     def generate_insights(self):
-        """Use Explanation Model - Returns insights as bullet points"""
+        """Use Explanation Model"""
         summary = self.get_data_summary()
         
         prompt_template = PromptTemplate(
@@ -505,10 +467,10 @@ Requirements:
 - Keep each insight to 1-2 sentences max"""
         )
         
-        chain = LLMChain(llm=explanation_llm, prompt=prompt_template)
-        insights_text = chain.run(data_summary=json.dumps(summary, indent=2, default=str))
+        chain = prompt_template | explanation_llm
+        insights_text = chain.invoke({"data_summary": json.dumps(summary, indent=2, default=str)})
         
-        lines = insights_text.strip().split('\n')
+        lines = insights_text.content.strip().split('\n')
         clean_insights = []
         
         for line in lines:
@@ -524,10 +486,7 @@ Requirements:
     # Main Analysis Workflow
     # ============================================
     def analyze(self):
-        """
-        Run complete analysis using 3 specialized models
-        + smart chart generation with explanations
-        """
+        """Run complete analysis"""
         result = {
             "file_name": self.file_name,
             "summary": self.get_data_summary(),
@@ -546,5 +505,4 @@ def test_analyzer(csv_path):
     analyzer = DataAnalyzer(csv_path)
     result = analyzer.analyze()
     print("Analysis Complete!")
-
     return result
