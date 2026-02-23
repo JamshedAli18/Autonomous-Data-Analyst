@@ -11,26 +11,50 @@ import numpy as np
 load_dotenv()
 
 # ============================================
-# Initialize ONLY the 3 Models You Specified
+# Check API Key
+# ============================================
+api_key = os.getenv("GROQ_API_KEY")
+if not api_key:
+    raise ValueError("GROQ_API_KEY not found in environment variables!")
+
+print(f"API Key loaded: {api_key[:10]}...")
+
+# ============================================
+# Initialize Models
 # ============================================
 
-planner_llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    temperature=0.4,
-    groq_api_key=os.getenv("GROQ_API_KEY")
-)
+try:
+    planner_llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        temperature=0.4,
+        groq_api_key=api_key
+    )
+    print("✓ Planner model initialized")
+except Exception as e:
+    print(f"✗ Planner model error: {e}")
+    raise
 
-code_gen_llm = ChatGroq(
-    model="openai/gpt-oss-120b",
-    temperature=0.2,
-    groq_api_key=os.getenv("GROQ_API_KEY")
-)
+try:
+    code_gen_llm = ChatGroq(
+        model="openai/gpt-oss-120b",
+        temperature=0.2,
+        groq_api_key=api_key
+    )
+    print("✓ Code generator model initialized")
+except Exception as e:
+    print(f"✗ Code generator model error: {e}")
+    raise
 
-explanation_llm = ChatGroq(
-    model="groq/compound-mini",
-    temperature=0.3,
-    groq_api_key=os.getenv("GROQ_API_KEY")
-)
+try:
+    explanation_llm = ChatGroq(
+        model="groq/compound-mini",
+        temperature=0.3,
+        groq_api_key=api_key
+    )
+    print("✓ Explanation model initialized")
+except Exception as e:
+    print(f"✗ Explanation model error: {e}")
+    raise
 
 class DataAnalyzer:
     def __init__(self, csv_file_path):
@@ -59,9 +83,10 @@ class DataAnalyzer:
     # ============================================
     def explain_chart(self, chart_title, chart_type, column_info):
         """Generate simple explanation for a chart"""
-        prompt_template = PromptTemplate(
-            input_variables=["chart_title", "chart_type", "column_info"],
-            template="""You are a data visualization expert. Explain this chart in simple, easy language:
+        try:
+            prompt_template = PromptTemplate(
+                input_variables=["chart_title", "chart_type", "column_info"],
+                template="""You are a data visualization expert. Explain this chart in simple, easy language:
 
 Chart Title: {chart_title}
 Chart Type: {chart_type}
@@ -73,16 +98,19 @@ Provide a 1-2 sentence explanation that:
 - Is concise and clear
 
 Keep it to maximum 2 sentences."""
-        )
-        
-        chain = prompt_template | explanation_llm
-        explanation = chain.invoke({
-            "chart_title": chart_title,
-            "chart_type": chart_type,
-            "column_info": column_info
-        })
-        
-        return explanation.content.strip()
+            )
+            
+            chain = prompt_template | explanation_llm
+            explanation = chain.invoke({
+                "chart_title": chart_title,
+                "chart_type": chart_type,
+                "column_info": column_info
+            })
+            
+            return explanation.content.strip()
+        except Exception as e:
+            print(f"Error in explain_chart: {e}")
+            return f"Chart showing {column_info}"
     
     # ============================================
     # SMART COLUMN TYPE INSPECTION
@@ -352,7 +380,7 @@ Keep it to maximum 2 sentences."""
         
         charts_to_create = self.decide_charts()
         
-        print(f"\n Generating {len(charts_to_create)} smart charts...")
+        print(f"\nGenerating {len(charts_to_create)} smart charts...")
         
         for chart in charts_to_create:
             if chart["type"] == "histogram":
@@ -380,11 +408,12 @@ Keep it to maximum 2 sentences."""
     # ============================================
     def plan_analysis(self):
         """Use Planner Model for reasoning"""
-        summary = self.get_data_summary()
-        
-        prompt_template = PromptTemplate(
-            input_variables=["data_info"],
-            template="""You are a Data Analysis Planner. Analyze this dataset and create a plan:
+        try:
+            summary = self.get_data_summary()
+            
+            prompt_template = PromptTemplate(
+                input_variables=["data_info"],
+                template="""You are a Data Analysis Planner. Analyze this dataset and create a plan:
 
 Dataset Info:
 {data_info}
@@ -396,29 +425,34 @@ Create a brief analysis plan with:
 4. Key patterns to look for
 
 Be concise and specific to THIS dataset."""
-        )
-        
-        chain = prompt_template | planner_llm
-        plan = chain.invoke({"data_info": json.dumps(summary, indent=2, default=str)})
-        
-        return plan.content
+            )
+            
+            chain = prompt_template | planner_llm
+            plan = chain.invoke({"data_info": json.dumps(summary, indent=2, default=str)})
+            
+            print("✓ Analysis plan generated")
+            return plan.content
+        except Exception as e:
+            print(f"✗ Error in plan_analysis: {e}")
+            return "Analysis plan could not be generated."
     
     # ============================================
     # STEP 2: Code Generator
     # ============================================
     def generate_analysis_code(self):
         """Use Code Generation Model"""
-        summary = self.get_data_summary()
-        
-        numeric_cols = summary['numeric_columns']
-        categorical_cols = summary['categorical_columns']
-        
-        numeric_str = ", ".join(numeric_cols) if numeric_cols else "None"
-        categorical_str = ", ".join(categorical_cols) if categorical_cols else "None"
-        
-        prompt_template = PromptTemplate(
-            input_variables=["numeric_cols", "categorical_cols"],
-            template="""You are a Python Data Analysis Code Generator.
+        try:
+            summary = self.get_data_summary()
+            
+            numeric_cols = summary['numeric_columns']
+            categorical_cols = summary['categorical_columns']
+            
+            numeric_str = ", ".join(numeric_cols) if numeric_cols else "None"
+            categorical_str = ", ".join(categorical_cols) if categorical_cols else "None"
+            
+            prompt_template = PromptTemplate(
+                input_variables=["numeric_cols", "categorical_cols"],
+                template="""You are a Python Data Analysis Code Generator.
 
 Generate Python code (using pandas & numpy) to analyze this data:
 - Numeric columns: {numeric_cols}
@@ -431,23 +465,28 @@ Generate code snippets for:
 4. Basic trends
 
 Format: Return only working Python code, no explanations."""
-        )
-        
-        chain = prompt_template | code_gen_llm
-        code = chain.invoke({"numeric_cols": numeric_str, "categorical_cols": categorical_str})
-        
-        return code.content
+            )
+            
+            chain = prompt_template | code_gen_llm
+            code = chain.invoke({"numeric_cols": numeric_str, "categorical_cols": categorical_str})
+            
+            print("✓ Code generated")
+            return code.content
+        except Exception as e:
+            print(f"✗ Error in generate_analysis_code: {e}")
+            return "# Code generation failed"
     
     # ============================================
     # STEP 3: Explanation Model
     # ============================================
     def generate_insights(self):
         """Use Explanation Model"""
-        summary = self.get_data_summary()
-        
-        prompt_template = PromptTemplate(
-            input_variables=["data_summary"],
-            template="""You are a Data Insight Explainer. Extract key insights from this data.
+        try:
+            summary = self.get_data_summary()
+            
+            prompt_template = PromptTemplate(
+                input_variables=["data_summary"],
+                template="""You are a Data Insight Explainer. Extract key insights from this data.
 
 Data Summary:
 {data_summary}
@@ -465,38 +504,58 @@ Requirements:
 - Be specific to the actual data
 - Start each line with a dash (-)
 - Keep each insight to 1-2 sentences max"""
-        )
-        
-        chain = prompt_template | explanation_llm
-        insights_text = chain.invoke({"data_summary": json.dumps(summary, indent=2, default=str)})
-        
-        lines = insights_text.content.strip().split('\n')
-        clean_insights = []
-        
-        for line in lines:
-            line = line.strip()
-            if line:
-                if not line.startswith('-'):
-                    line = f"- {line}"
-                clean_insights.append(line)
-        
-        return '\n'.join(clean_insights[:5])
+            )
+            
+            chain = prompt_template | explanation_llm
+            insights_text = chain.invoke({"data_summary": json.dumps(summary, indent=2, default=str)})
+            
+            lines = insights_text.content.strip().split('\n')
+            clean_insights = []
+            
+            for line in lines:
+                line = line.strip()
+                if line:
+                    if not line.startswith('-'):
+                        line = f"- {line}"
+                    clean_insights.append(line)
+            
+            print("✓ Insights generated")
+            return '\n'.join(clean_insights[:5])
+        except Exception as e:
+            print(f"✗ Error in generate_insights: {e}")
+            return "- Insights could not be generated due to an error."
     
     # ============================================
     # Main Analysis Workflow
     # ============================================
     def analyze(self):
         """Run complete analysis"""
+        print("\n" + "="*50)
+        print("STARTING DATA ANALYSIS")
+        print("="*50)
+        
+        summary = self.get_data_summary()
+        print(f"Data loaded: {summary['rows']} rows, {summary['shape'][1]} columns")
+        
         result = {
             "file_name": self.file_name,
-            "summary": self.get_data_summary(),
+            "summary": summary,
+            "data_shape": f"{summary['rows']} x {summary['shape'][1]}",
+            "columns": summary['columns'],
             "analysis_plan": self.plan_analysis(),
             "generated_code": self.generate_analysis_code(),
             "insights": self.generate_insights(),
             "charts": self.generate_smart_charts(),
+            "charts_generated": len(self.charts_generated),
             "chart_titles": [c["title"] for c in self.charts_generated],
+            "chart_files": [c["file"] for c in self.charts_generated],
             "chart_explanations": [c["explanation"] for c in self.charts_generated]
         }
+        
+        print("="*50)
+        print("ANALYSIS COMPLETE")
+        print("="*50 + "\n")
+        
         return result
 
 
