@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from langchain_groq import ChatGroq
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from langchain.chains import LLMChain
 from dotenv import load_dotenv
 import json
@@ -546,4 +546,5 @@ def test_analyzer(csv_path):
     analyzer = DataAnalyzer(csv_path)
     result = analyzer.analyze()
     print("Analysis Complete!")
+
     return result
